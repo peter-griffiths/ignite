@@ -582,60 +582,47 @@ public class CacheContinuousQueryHandler<K, V> implements GridContinuousHandler 
 
         final List<CacheContinuousQueryEntry> entries = (List<CacheContinuousQueryEntry>)objs;
 
-        if (!entries.isEmpty()) {
-            if (asyncCallback) {
-                int partId = entries.get(0).partition();
+        if (entries.isEmpty())
+            return;
 
-                if (entries.size() != 1) {
-                    Map<Integer, Collection<CacheContinuousQueryEntry>> entriesByPart = null;
+        if (asyncCallback) {
+            int partId = entries.get(0).partition();
 
-                    for (int i = 0; i < entries.size(); i++) {
-                        int curPart = entries.get(i).partition();
+            int startIdx = 0;
 
-                        // If all entries from one partition avoid creation new collections.
-                        if (curPart == partId && entriesByPart == null)
-                            continue;
+            if (entries.size() != 1) {
+                for (int i = 1; i < entries.size(); i++) {
+                    int curPart = entries.get(i).partition();
 
-                        if (entriesByPart == null) {
-                            entriesByPart = new HashMap<>();
+                    // If all entries from one partition avoid creation new collections.
+                    if (curPart == partId)
+                        continue;
 
-                            entriesByPart.put(partId, new ArrayList<>(entries.subList(0, i)));
+                    final int i0 = i;
+                    final int startIdx0 = startIdx;
+
+                    ctx.asyncCallbackPool().execute(new Runnable() {
+                        @Override public void run() {
+                            notifyCallback0(nodeId, ctx, entries.subList(startIdx0, i0));
                         }
+                    }, partId);
 
-                        Collection<CacheContinuousQueryEntry> entries0 = entriesByPart.get(curPart);
-
-                        if (entries0 == null) {
-                            entries0 = new ArrayList<>(entries.size() - i);
-
-                            entriesByPart.put(curPart, entries0);
-                        }
-
-                        entries0.add(entries.get(i));
-                    }
-
-                    if (entriesByPart != null) {
-                        for (final Map.Entry<Integer, Collection<CacheContinuousQueryEntry>> e :
-                            entriesByPart.entrySet()) {
-                            ctx.asyncCallbackPool().execute(new Runnable() {
-                                @Override public void run() {
-                                    notifyCallback0(nodeId, ctx, e.getValue());
-                                }
-                            }, e.getKey());
-                        }
-
-                        return;
-                    }
+                    startIdx = i0;
+                    partId = curPart;
                 }
-
-                ctx.asyncCallbackPool().execute(new Runnable() {
-                    @Override public void run() {
-                        notifyCallback0(nodeId, ctx, entries);
-                    }
-                }, partId);
             }
-            else
-                notifyCallback0(nodeId, ctx, entries);
+
+            final int startIdx0 = startIdx;
+
+            ctx.asyncCallbackPool().execute(new Runnable() {
+                @Override public void run() {
+                    notifyCallback0(nodeId, ctx,
+                        startIdx0 == 0 ? entries : entries.subList(startIdx0, entries.size()));
+                }
+            }, partId);
         }
+        else
+            notifyCallback0(nodeId, ctx, entries);
     }
 
     /**
@@ -648,7 +635,7 @@ public class CacheContinuousQueryHandler<K, V> implements GridContinuousHandler 
         Collection<CacheContinuousQueryEntry> entries) {
         final GridCacheContext cctx = cacheContext(ctx);
 
-        final Collection<CacheEntryEvent<? extends K, ? extends V>> entries0 = new ArrayList<>();
+        final Collection<CacheEntryEvent<? extends K, ? extends V>> entries0 = new ArrayList<>(entries.size());
 
         for (CacheContinuousQueryEntry e : entries) {
             GridCacheDeploymentManager depMgr = cctx.deploy();
@@ -701,8 +688,7 @@ public class CacheContinuousQueryHandler<K, V> implements GridContinuousHandler 
             if (e.isFiltered())
                 return Collections.emptyList();
             else
-                return F.<CacheEntryEvent<? extends K, ? extends V>>asList(
-                    new CacheContinuousQueryEvent<K, V>(cache, cctx, e));
+                return F.<CacheEntryEvent<? extends K, ? extends V>>asList(new CacheContinuousQueryEvent<K, V>(cache, cctx, e));
         }
 
         // Initial query entry or evicted entry. These events should be fired immediately.
@@ -738,15 +724,10 @@ public class CacheContinuousQueryHandler<K, V> implements GridContinuousHandler 
         if (!notify)
             entry.markFiltered();
 
-        if (!primary) {
-            if (!internal) {
-                // Skip init query and expire entries.
-                if (entry.updateCounter() != -1L) {
-                    entry.markBackup();
+        if (!primary && !internal && entry.updateCounter() != -1L /* Skip init query and expire entries */) {
+            entry.markBackup();
 
-                    backupQueue.add(entry);
-                }
-            }
+            backupQueue.add(entry);
         }
 
         return notify;

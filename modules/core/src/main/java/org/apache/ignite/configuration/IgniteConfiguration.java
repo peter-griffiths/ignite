@@ -43,6 +43,7 @@ import org.apache.ignite.events.Event;
 import org.apache.ignite.events.EventType;
 import org.apache.ignite.internal.managers.eventstorage.GridEventStorageManager;
 import org.apache.ignite.internal.util.typedef.internal.S;
+import org.apache.ignite.lang.IgniteAsyncCallback;
 import org.apache.ignite.lang.IgniteInClosure;
 import org.apache.ignite.lang.IgnitePredicate;
 import org.apache.ignite.lifecycle.LifecycleBean;
@@ -726,11 +727,12 @@ public class IgniteConfiguration {
     }
 
     /**
-     * Size of thread pool that is in charge of processing continuous query events.
+     * Size of thread pool that is in charge of processing asynchronous callbacks.
      * <p>
      * If not provided, executor service will have size {@link #DFLT_PUBLIC_THREAD_CNT}.
      *
      * @return Thread pool size to be used
+     * @see IgniteAsyncCallback
      */
     public int getAsyncCallbackPoolSize() {
         return callbackPoolSize;

@@ -19,6 +19,7 @@ package org.apache.ignite.thread;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -78,7 +79,10 @@ public class IgniteStripedThreadPoolExecutor implements ExecutorService {
 
     /** {@inheritDoc} */
     @Override public List<Runnable> shutdownNow() {
-        List<Runnable> res = new ArrayList<>();
+        if (execs.length == 0)
+            return Collections.emptyList();
+
+        List<Runnable> res = new ArrayList<>(execs.length);
 
         for (ExecutorService exec : execs) {
             for (Runnable r : exec.shutdownNow())
@@ -120,29 +124,21 @@ public class IgniteStripedThreadPoolExecutor implements ExecutorService {
 
     /** {@inheritDoc} */
     @NotNull @Override public <T> Future<T> submit(Callable<T> task) {
-        assert false;
-
         throw new UnsupportedOperationException();
     }
 
     /** {@inheritDoc} */
     @NotNull @Override public <T> Future<T> submit(Runnable task, T res) {
-        assert false;
-
         throw new UnsupportedOperationException();
     }
 
     /** {@inheritDoc} */
     @NotNull @Override public Future<?> submit(Runnable task) {
-        assert false;
-
         throw new UnsupportedOperationException();
     }
 
     /** {@inheritDoc} */
     @NotNull @Override public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks) {
-        assert false;
-
         throw new UnsupportedOperationException();
     }
 
@@ -150,29 +146,21 @@ public class IgniteStripedThreadPoolExecutor implements ExecutorService {
     @NotNull @Override public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks,
         long timeout,
         TimeUnit unit) {
-        assert false;
-
         throw new UnsupportedOperationException();
     }
 
     /** {@inheritDoc} */
     @NotNull @Override public <T> T invokeAny(Collection<? extends Callable<T>> tasks) {
-        assert false;
-
         throw new UnsupportedOperationException();
     }
 
     /** {@inheritDoc} */
     @Override public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit) {
-        assert false;
-
         throw new UnsupportedOperationException();
     }
 
     /** {@inheritDoc} */
     @Override public void execute(Runnable cmd) {
-        assert false;
-
         throw new UnsupportedOperationException();
     }
 
