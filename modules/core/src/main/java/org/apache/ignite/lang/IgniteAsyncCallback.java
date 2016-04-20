@@ -23,19 +23,83 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import javax.cache.event.CacheEntryEventFilter;
 import javax.cache.event.CacheEntryListener;
+import javax.cache.event.CacheEntryUpdatedListener;
+import org.apache.ignite.cache.query.ContinuousQuery;
 import org.apache.ignite.configuration.IgniteConfiguration;
 
 /**
- * If callback has this annotation when it will be executing in another thread.
- * <p/>
+ * If callback has this annotation then it will be executing in another thread.
+ * <p>
+ * Now this annotation is supported {@link CacheEntryUpdatedListener} and {@link CacheEntryEventFilter}
+ * for {@link ContinuousQuery}.
+ * <p>
  * For example, if {@link CacheEntryEventFilter filter} or {@link CacheEntryListener}
- * annotated this annotation then they will be executing on a separate thread pool. It allows
- * to use cache API in a callbacks.
- * <p/>
- * For executing callbacks using callback thread pool which can be configured by
+ * annotated this annotation then they will be executing to asyncCallback thread pool. It allows to use cache API
+ * in a callbacks. This thread pool which can be configured by
  * {@link IgniteConfiguration#setAsyncCallbackPoolSize(int)}
+ * <h1 class="header">Example</h1>
+ * As an example, suppose we have cache with {@code 'Person'} objects and we need
+ * to query all persons with salary above then 1000. Also remote filter will update some entries.
+ * <p>
+ * Here is the {@code Person} class:
+ * <pre name="code" class="java">
+ * public class Person {
+ *     // Name.
+ *     private String name;
  *
- * @see IgniteConfiguration#setAsyncCallbackPoolSize(int)
+ *     // Salary.
+ *     private double salary;
+ *
+ *     ...
+ * }
+ * </pre>
+ * <p>
+ * Here is the {@code ExampleCacheEntryFilter} class:
+ * <pre name="code" class="java">
+ * &#064;IgniteAsyncCallback
+ * public class ExampleCacheEntryFilter implements CacheEntryEventFilter&lt;Integer, Person&gt; {
+ *     &#064;IgniteInstanceResource
+ *     private Ignite ignite;
+ *
+ *     // Continuous listener will be notified for persons with salary above 1000.
+ *     // Filter increases salary for some person on 100. Without &#064;IgniteAsyncCallback annotation
+ *     // this operation is not safe.
+ *     public boolean evaluate(CacheEntryEvent&lt;? extends K, ? extends V&gt; evt) throws CacheEntryListenerException {
+ *         Person p = evt.getValue();
+ *
+ *         if (p.getSalary() &gt; 1000)
+ *             return true;
+ *
+ *         ignite.cache("Person").put(evt.getKey(), new Person(p.getName(), p.getSalary() + 100));
+ *
+ *         return false;
+ *     }
+ * }
+ * </pre>
+ * <p>
+ * Query with asynchronous callback execute as usually:
+ * <pre name="code" class="java">
+ * // Create new continuous query.
+ * ContinuousQuery&lt;Long, Person&gt; qry = new ContinuousQuery&lt;&gt;();
+ *
+ * // Callback that is called locally when update notifications are received.
+ * // It simply prints out information about all created persons.
+ * qry.setLocalListener((evts) -> {
+ *     for (CacheEntryEvent&lt;? extends Long, ? extends Person&gt; e : evts) {
+ *         Person p = e.getValue();
+ *
+ *         System.out.println(p.getFirstName() + " " + p.getLastName() + "'s salary is " + p.getSalary());
+ *     }
+ * });
+ *
+ * // Sets remote filter.
+ * qry.setRemoteFilterFactory(() -> new ExampleCacheEntryFilter());
+ *
+ * // Execute query.
+ * QueryCursor&lt;Cache.Entry&lt;Long, Person&gt;&gt; cur = cache.query(qry);
+ * </pre>
+ *
+ * @see IgniteConfiguration#getAsyncCallbackPoolSize
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)

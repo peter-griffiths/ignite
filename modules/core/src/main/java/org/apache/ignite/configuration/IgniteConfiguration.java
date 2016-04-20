@@ -34,6 +34,7 @@ import org.apache.ignite.Ignition;
 import org.apache.ignite.cache.CacheKeyConfiguration;
 import org.apache.ignite.cache.affinity.Affinity;
 import org.apache.ignite.cache.affinity.AffinityFunction;
+import org.apache.ignite.cache.query.ContinuousQuery;
 import org.apache.ignite.cache.store.CacheStoreSessionListener;
 import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.cluster.ClusterNode;
@@ -729,6 +730,9 @@ public class IgniteConfiguration {
     /**
      * Size of thread pool that is in charge of processing asynchronous callbacks.
      * <p>
+     * This pool will be used for case when need to perform cache operation in callbacks but in system thread is not
+     * safe (potential deadlock, starvation and etc) for example {@link ContinuousQuery}.
+     * <p>
      * If not provided, executor service will have size {@link #DFLT_PUBLIC_THREAD_CNT}.
      *
      * @return Thread pool size to be used
@@ -852,6 +856,7 @@ public class IgniteConfiguration {
      * @param poolSize Thread pool size to use within grid.
      * @return {@code this} for chaining.
      * @see IgniteConfiguration#getAsyncCallbackPoolSize()
+     * @see IgniteAsyncCallback
      */
     public IgniteConfiguration setAsyncCallbackPoolSize(int poolSize) {
         this.callbackPoolSize = poolSize;

@@ -65,10 +65,15 @@ public class IgniteStripedThreadPoolExecutor implements ExecutorService {
      * @throws NullPointerException If command is null
      */
     public void execute(Runnable task, int idx) {
-        if (idx < execs.length)
-            execs[idx].execute(task);
-        else
-            execs[idx % execs.length].execute(task);
+        execs[threadId(idx)].execute(task);
+    }
+
+    /**
+     * @param idx Index.
+     * @return Stripped thread ID.
+     */
+    public int threadId(int idx) {
+        return idx < execs.length ? idx : idx % execs.length;
     }
 
     /** {@inheritDoc} */

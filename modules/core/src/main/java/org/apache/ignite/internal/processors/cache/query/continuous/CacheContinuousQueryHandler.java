@@ -77,6 +77,7 @@ import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteAsyncCallback;
 import org.apache.ignite.lang.IgniteBiTuple;
+import org.apache.ignite.thread.IgniteStripedThreadPoolExecutor;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jsr166.ConcurrentLinkedDeque8;
@@ -586,40 +587,42 @@ public class CacheContinuousQueryHandler<K, V> implements GridContinuousHandler 
             return;
 
         if (asyncCallback) {
-            int partId = entries.get(0).partition();
+            IgniteStripedThreadPoolExecutor asyncPool = ctx.asyncCallbackPool();
+
+            int threadId = asyncPool.threadId(entries.get(0).partition());
 
             int startIdx = 0;
 
             if (entries.size() != 1) {
                 for (int i = 1; i < entries.size(); i++) {
-                    int curPart = entries.get(i).partition();
+                    int curThreadId = asyncPool.threadId(entries.get(i).partition());
 
                     // If all entries from one partition avoid creation new collections.
-                    if (curPart == partId)
+                    if (curThreadId == threadId)
                         continue;
 
                     final int i0 = i;
                     final int startIdx0 = startIdx;
 
-                    ctx.asyncCallbackPool().execute(new Runnable() {
+                    asyncPool.execute(new Runnable() {
                         @Override public void run() {
                             notifyCallback0(nodeId, ctx, entries.subList(startIdx0, i0));
                         }
-                    }, partId);
+                    }, threadId);
 
                     startIdx = i0;
-                    partId = curPart;
+                    threadId = curThreadId;
                 }
             }
 
             final int startIdx0 = startIdx;
 
-            ctx.asyncCallbackPool().execute(new Runnable() {
+            asyncPool.execute(new Runnable() {
                 @Override public void run() {
                     notifyCallback0(nodeId, ctx,
                         startIdx0 == 0 ? entries : entries.subList(startIdx0, entries.size()));
                 }
-            }, partId);
+            }, threadId);
         }
         else
             notifyCallback0(nodeId, ctx, entries);
@@ -1434,13 +1437,36 @@ public class CacheContinuousQueryHandler<K, V> implements GridContinuousHandler 
 
         /** {@inheritDoc} */
         @Override public void run() {
-            boolean notify = filter(evt, primary);
+            final boolean notify = filter(evt, primary);
 
-            if (primary()) {
-                if (fut != null && !waitFuture())
+            if (!primary())
+                return;
+
+            if (fut == null) {
+                onEntryUpdate(evt, notify, nodeId.equals(ctx.localNodeId()), recordIgniteEvt);
+
+                return;
+            }
+
+            if (fut.isDone()) {
+                if (fut.error() != null)
                     evt.entry().markFiltered();
 
                 onEntryUpdate(evt, notify, nodeId.equals(ctx.localNodeId()), recordIgniteEvt);
+            }
+            else {
+                fut.listen(new CI1<IgniteInternalFuture<?>>() {
+                    @Override public void apply(IgniteInternalFuture<?> f) {
+                        if (f.error() != null)
+                            evt.entry().markFiltered();
+
+                        ctx.asyncCallbackPool().execute(new Runnable() {
+                            @Override public void run() {
+                                onEntryUpdate(evt, notify, nodeId.equals(ctx.localNodeId()), recordIgniteEvt);
+                            }
+                        }, evt.entry().partition());
+                    }
+                });
             }
         }
 
@@ -1449,20 +1475,6 @@ public class CacheContinuousQueryHandler<K, V> implements GridContinuousHandler 
          */
         private boolean primary() {
             return primary || skipPrimaryCheck;
-        }
-
-        /**
-         * @return {@code False} if future completed with error otherwise {@code true}.
-         */
-        private boolean waitFuture() {
-            try {
-                fut.get();
-            }
-            catch (IgniteCheckedException e) {
-                return false;
-            }
-
-            return true;
         }
 
         /** {@inheritDoc} */
