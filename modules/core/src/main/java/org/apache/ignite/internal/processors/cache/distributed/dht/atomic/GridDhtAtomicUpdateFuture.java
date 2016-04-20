@@ -205,11 +205,6 @@ public class GridDhtAtomicUpdateFuture extends GridFutureAdapter<Void>
         return null;
     }
 
-    /** {@inheritDoc} */
-    @Override public Collection<KeyCacheObject> keys() {
-        return keys;
-    }
-
     /**
      * @param entry Entry to map.
      * @param val Value to write.
